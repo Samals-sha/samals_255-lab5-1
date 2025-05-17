@@ -1,19 +1,26 @@
 FROM python:3.9-slim
 
-# Install dependencies
-RUN apt-get clean && apt-get -y update && apt-get -y install nginx python3-dev build-essential nfs-common && rm -rf /var/lib/apt/lists/*
+# Set a working directory
+WORKDIR /app
 
-# Create mount point for NFS
+RUN apt-get clean && \
+    apt-get -y update && \
+    apt-get -y install python3-dev build-essential sqlite3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create mount point for NFS (harmless, ensures directory exists in image layer)
+# Kubernetes will mount the PV over this.
 RUN mkdir -p /nfs
 
-# Copy application files
-COPY . .
-
+# Copy application files into the working directory
+COPY requirements1.txt ./
 # Install Python dependencies
-RUN pip install -r requirements1.txt
+RUN pip install --no-cache-dir -r requirements1.txt
+
+COPY . . # Copy the rest of the application files (main.py, data-gen.py, etc.)
 
 # Expose port 5000 for the application
 EXPOSE 5000
 
 # Command to run the application
-CMD ["python3", "main.py"] 
+CMD ["python3", "main.py"]
