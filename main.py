@@ -35,38 +35,49 @@ def generate_random_phone():
 @app.route('/', methods=['GET', 'POST'])
 def index():
     message = ''  # Message indicating the result of the operation
-    if request.method == 'POST':
-        # Check if it's a delete action
-        if request.form.get('action') == 'delete':
-            contact_id = request.form.get('contact_id')
-            db = get_db()
-            db.execute('DELETE FROM contacts WHERE id = ?', (contact_id,))
-            db.commit()
-            message = 'Contact deleted successfully.'
-        elif action == 'add_random':
-            db = get_db()
-            random_name = generate_random_name()
-            random_phone = generate_random_phone()
-            db.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (random_name, random_phone))
-            db.commit()
-            db.close()
-            message = f'Random contact ({random_name}) added successfully.'
-        elif action == 'clear_all': # New action to clear all contacts
-            db = get_db()
-            db.execute('DELETE FROM contacts')
-            db.commit()
-            db.close()
-            message = 'All contacts have been cleared successfully.'
-        else:
-            name = request.form.get('name')
-            phone = request.form.get('phone')
-            if name and phone:
-                db = get_db()
-                db.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (name, phone))
-                db.commit()
-                message = 'Contact added successfully.'
-            else:
-                message = 'Missing name or phone number.'
+if request.method == 'POST':
+        action = request.form.get('action') # Get the action once
+        try:
+            db_conn = get_db() # Get DB connection once for the POST request if an action is expected
+
+            if action == 'delete':
+                contact_id = request.form.get('contact_id')
+                if contact_id:
+                    db_conn.execute('DELETE FROM contacts WHERE id = ?', (contact_id,))
+                    db_conn.commit()
+                    message = 'Contact deleted successfully.'
+                else:
+                    message = 'Error: Contact ID missing for delete action.'
+
+            elif action == 'add_random':
+                random_name = generate_random_name()
+                random_phone = generate_random_phone()
+                db_conn.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (random_name, random_phone))
+                db_conn.commit()
+                message = f'Random contact ({random_name}) added successfully.'
+
+            elif action == 'clear_all':
+                db_conn.execute('DELETE FROM contacts')
+                db_conn.commit()
+                message = 'All contacts have been cleared successfully.'
+            
+            # This 'else' corresponds to the 'if action == ...'
+            # It implies that if 'action' is not one of the above, it's a manual add attempt.
+            # Or, if 'action' is None (e.g., the main submit button of the add form was pressed which might not send an 'action' field)
+            else: # Default action is adding a specific contact from the manual form
+                name = request.form.get('name')
+                phone = request.form.get('phone')
+
+                if name and phone:
+                    db_conn.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (name, phone))
+                    db_conn.commit()
+                    message = 'Contact added successfully.'
+                # Only show missing fields message if at least one field was attempted or if it's the default form submission
+                elif request.form.get('name') is not None or request.form.get('phone') is not None: # Check if form was submitted
+                    message = 'Both name and phone number are required for manual entry.'
+                # If no specific action, and no name/phone, it might be an unhandled POST or page refresh after POST.
+                # If no specific form was submitted with an action, and no name/phone provided, no message is needed
+                # unless you want to explicitly state "No action taken."
 
     # Always display the contacts table
     db = get_db()
