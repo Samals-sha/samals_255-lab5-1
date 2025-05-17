@@ -52,22 +52,61 @@ pipeline {
                     // This updates the deployment-dev.yaml to use the new image tag
                     sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment-dev.yaml"
                     sh "kubectl apply -f deployment-dev.yaml"
+                    sh "kubectl rollout status deployment/flask-dev-deployment --namespace=default --timeout=3m"
                 }
             }
         }
 
         stage('Generate Test Data') {
-            steps {
-                script {
-                // Ensure the label accurately targets the correct pods.
-                def appPod = sh(script: "kubectl get pods -l app=flask -o jsonpath='{.items[0].metadata.name}'", returnStdout: true).trim()
-                // Execute command within the pod. 
-                sh "kubectl get pods"
-                sh "sleep 100"
-                sh "kubectl exec ${appPod} -- python3 data-gen.py"
+    steps {
+        script {
+            def appPod = ''
+            def appLabelValue = 'flask'               
+            def appDeploymentName = 'flask-dev-deployment' 
+            def appContainerName = 'flask'         
+            def appNamespace = 'default'                 
+            echo "Finding a Running pod with label app=${appLabelValue} in namespace ${appNamespace}..."
+            timeout(time: 3, unit: 'MINUTES') {
+                while (appPod == '') {
+                    appPod = sh(script: "kubectl get pods -l app=${appLabelValue} --namespace=${appNamespace} -o jsonpath='{.items[?(@.status.phase==\"Running\")].metadata.name}'", returnStdout: true).trim().tokenize(' ')[0] ?: ''
+                    if (appPod == '') {
+                        echo "No Running pod found yet with label app=${appLabelValue}. Current matching pods:"
+                        sh "kubectl get pods -l app=${appLabelValue} --namespace=${appNamespace}"
+                        sleep 15
+                    } else {
+                        echo "Found potential running pod: ${appPod}"
+                    }
                 }
             }
+
+            if (appPod) {
+                echo "Target pod for data generation: ${appPod}"
+                
+                echo "Waiting for pod ${appPod} to be fully Ready..."
+                sh "kubectl wait --for=condition=Ready pod/${appPod} --namespace=${appNamespace} --timeout=2m"
+                
+                echo "Executing data-gen.py in pod ${appPod}, container ${appContainerName}..."
+                sh "kubectl exec ${appPod} --namespace=${appNamespace} --container ${appContainerName} -- python3 data-gen.py"
+                echo "data-gen.py script executed."
+
+                echo "Verifying data generation by querying DB in pod..."
+                try {
+                    def queryOutput = sh(script: "kubectl exec ${appPod} --namespace=${appNamespace} --container ${appContainerName} -- sqlite3 /nfs/demo.db \"SELECT COUNT(*) FROM contacts WHERE name LIKE 'Test Name %';\"", returnStdout: true).trim()
+                    echo "Query for 'Test Name %' count returned: ${queryOutput}"
+                    if (queryOutput == "10") {
+                        echo "DB Verification successful: Found 10 'Test Name %' contacts."
+                    } else {
+                        echo "DB Verification WARNING: Expected 10 'Test Name %' contacts, found ${queryOutput}."
+                    }
+                } catch (Exception e) {
+                    echo "Warning: Error during database verification query: ${e.getMessage()}"
+                }
+            } else {
+                error "Failed to find a running pod with label app=${appLabelValue} in namespace ${appNamespace} for data generation after timeout."
+            }
+        }
     }
+}
 
         stage("Run Acceptance Tests") {
             steps {
