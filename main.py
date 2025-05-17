@@ -75,7 +75,6 @@ def index():
     # Always display the contacts table
     db = get_db()
     contacts = db.execute('SELECT * FROM contacts').fetchall()
-    db_display_conn.close()
     # Display the HTML form along with the contacts table
     return render_template_string('''
         <!DOCTYPE html>
