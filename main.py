@@ -36,7 +36,7 @@ def generate_random_phone():
 def index():
     message = ''  # Message indicating the result of the operation
     if request.method == 'POST':
-        # action = request.form.get('action')
+        action = request.form.get('action')
         # Check if it's a delete action
         if request.form.get('action') == 'delete':
             contact_id = request.form.get('contact_id')
