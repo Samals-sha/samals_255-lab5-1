@@ -25,6 +25,7 @@ def init_db():
             );
         ''')
         db.commit()
+        db.close()
 
 def generate_random_name():
     return f"User_{random.randint(1000, 99999)}"
@@ -43,6 +44,7 @@ def index():
             db = get_db()
             db.execute('DELETE FROM contacts WHERE id = ?', (contact_id,))
             db.commit()
+            db.close() 
             message = 'Contact deleted successfully.'
         elif action == 'add_random':
             db = get_db()
@@ -65,6 +67,7 @@ def index():
                 db = get_db()
                 db.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (name, phone))
                 db.commit()
+                db.close()
                 message = 'Contact added successfully.'
             else:
                 message = 'Missing name or phone number.'
@@ -72,7 +75,7 @@ def index():
     # Always display the contacts table
     db = get_db()
     contacts = db.execute('SELECT * FROM contacts').fetchall()
-
+    db_display_conn.close()
     # Display the HTML form along with the contacts table
     return render_template_string('''
         <!DOCTYPE html>
@@ -135,6 +138,9 @@ def index():
     ''', message=message, contacts=contacts)
 
 if __name__ == "__main__":
+    db_dir = os.path.dirname(DATABASE)
+    if db_dir and not os.path.exists(db_dir): # Check if db_dir is not empty
+        os.makedirs(db_dir, exist_ok=True)
+    init_db()
     port = int(os.environ.get("PORT", 5000))
-    init_db()  # Initialize the database and table
     app.run(debug=True, host='0.0.0.0', port=port)
