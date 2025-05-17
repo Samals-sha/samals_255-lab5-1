@@ -1,6 +1,8 @@
 from flask import Flask, request, render_template_string, redirect, url_for
 import sqlite3
 import os
+import random
+import string
 
 app = Flask(__name__)
 
@@ -24,6 +26,12 @@ def init_db():
         ''')
         db.commit()
 
+def generate_random_name():
+    return f"User_{random.randint(1000, 99999)}"
+
+def generate_random_phone():
+    return ''.join(random.choices(string.digits, k=10))
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     message = ''  # Message indicating the result of the operation
@@ -35,6 +43,20 @@ def index():
             db.execute('DELETE FROM contacts WHERE id = ?', (contact_id,))
             db.commit()
             message = 'Contact deleted successfully.'
+        elif action == 'add_random':
+            db = get_db()
+            random_name = generate_random_name()
+            random_phone = generate_random_phone()
+            db.execute('INSERT INTO contacts (name, phone) VALUES (?, ?)', (random_name, random_phone))
+            db.commit()
+            db.close()
+            message = f'Random contact ({random_name}) added successfully.'
+        elif action == 'clear_all': # New action to clear all contacts
+            db = get_db()
+            db.execute('DELETE FROM contacts')
+            db.commit()
+            db.close()
+            message = 'All contacts have been cleared successfully.'
         else:
             name = request.form.get('name')
             phone = request.form.get('phone')
@@ -56,6 +78,11 @@ def index():
         <html>
         <head>
             <title>Contacts</title>
+            <script>
+        function confirmClearAll() {
+        return confirm("Are you sure you want to delete ALL contacts? This action cannot be undone.");
+            }
+        </script>
         </head>
         <body>
             <h2>Add Contacts</h2>
@@ -66,6 +93,17 @@ def index():
                 <input type="text" id="phone" name="phone" required><br><br>
                 <input type="submit" value="Submit">
             </form>
+            <div class="action-buttons">
+                <h2>Quick Actions</h2>
+                <form method="POST" action="/">
+                    <input type="hidden" name="action" value="add_random">
+                    <input type="submit" value="Add Random Test Contact">
+                </form>
+                <form method="POST" action="/" class="clear-all-form" onsubmit="return confirmClearAll();">
+                    <input type="hidden" name="action" value="clear_all">
+                    <input type="submit" value="Clear All Contacts" style="background-color: #dc3545;">
+                </form>
+            </div>
             <p>{{ message }}</p>
             {% if contacts %}
                 <table border="1">
